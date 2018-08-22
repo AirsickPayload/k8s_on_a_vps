@@ -1,0 +1,30 @@
+{{- range $application, $parameters := .Values.customApps }}
+{{ if $parameters.service.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $.Release.Name }}-{{ $application }}
+  labels:
+    app: {{ $.Chart.Name }}-{{ $application }}
+    chart: {{ $.Chart.Name }}-{{ $.Chart.Version | replace "+" "_" }}
+    release: {{ $.Release.Name }}
+    heritage: {{ $.Release.Service }}
+spec:
+  type: {{ $parameters.service.type }}
+  ports:
+  {{ if $parameters.service.copyContainerPorts }}
+  {{ range $irrelevant, $entry := $parameters.containerPorts }}
+    - name: {{ $entry.name }}
+      port: {{ $entry.containerPort }}
+      targetPort: {{ $entry.containerPort }}
+      protocol: {{ $entry.protocol }}
+  {{ end }}
+  {{ else }}
+{{ toYaml $parameters.service.customPorts | indent 4 }}
+  {{ end }}
+  selector:
+    app: {{ $.Chart.Name }}-{{ $application }}
+    release: {{ $.Release.Name }}
+{{ end }}
+{{- end -}}

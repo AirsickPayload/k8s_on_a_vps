@@ -1,0 +1,354 @@
+---
+
+imagePullPolicy: "Always"
+
+certManager:
+  email: 'your@email.com'
+  domain: '*.your.domain.com'
+  acmeServer: 'https://acme-v02.api.letsencrypt.org/directory'
+  issuerSecret: 'letsencrypt-prod'
+  certificateSecret: 'acme-wildcard'
+  cloudflareSecretName: 'cloudflare-api-key'
+  cloudflareApiKey: 'YOUR-API-KEY'
+
+ingress:
+  enabled: true
+  instances:
+    basic-auth:
+      tls:
+        enabled: true
+      annotations:
+        kubernetes.io/ingress.class: nginx
+        kubernetes.io/tls-acme: 'true'
+        ### https://github.com/kubernetes/ingress-nginx/tree/master/docs/examples/auth/basic
+        nginx.ingress.kubernetes.io/auth-type: basic
+        nginx.ingress.kubernetes.io/auth-secret: nginx-basic-auth
+      microservices:
+        syncthing.your.domain.com:
+          svcSuffix: 'syncthing'
+          svcPort: 8384
+          path: ''
+          # tlsSecret: https-{{ VALUE_FROM_FROM_CERTIFICATED_DEFINED_ABOVE }}
+          tlsSecret: acme-wildcard
+    no-auth:
+      tls:
+        enabled: true
+      annotations:
+        kubernetes.io/ingress.class: nginx
+        kubernetes.io/tls-acme: 'true'
+      microservices:
+        shaarli.your.domain.com:
+          svcSuffix: 'shaarli'
+          svcPort: 80
+          path: ''
+          tlsSecret: acme-wildcard
+
+customApps:
+
+###################
+################### SHAARLI
+###################
+
+  shaarli:
+
+    controller: 'deployment'
+
+    deployment:
+      strategy:
+        # rollingUpdate:
+        #   maxSurge: 25%
+        #   maxUnavailable: 25%
+        # type: RollingUpdate
+        type: Recreate
+
+    securityContext:
+      enabled: true
+      spec:
+        runAsUser: 0
+        fsGroup: 100
+
+    resources:
+      #.
+      limits:
+        cpu: 1
+        memory: 512Mi
+      requests:
+        cpu: 0.1
+        memory: 512Mi
+
+    initContainers:
+      enabled: true
+      spec:
+        - name: volume-mount-chown
+          image: busybox:latest
+          command: ["sh", "-c", "chown -R 100:100 /var/www/shaarli/data"]
+          volumeMounts:
+            - mountPath: /var/www/shaarli/data
+              name: shaarli-data
+
+    replicas: 1
+    image:
+      name: shaarli/shaarli
+      tag: master
+
+    environmentVariables:
+
+    readinessProbe:
+      tcpSocket:
+        port: ui
+      initialDelaySeconds: 5
+      periodSeconds: 5
+    livenessProbe:
+      tcpSocket:
+        port: ui
+      initialDelaySeconds: 5
+      periodSeconds: 10
+
+    service:
+      enabled: true
+      type: ClusterIP
+      copyContainerPorts: true
+      # used when copyContainerPorts: false
+      customPorts: {}
+
+    containerPorts:
+      # Commented first line
+      - name: ui
+        containerPort: 80
+        protocol: TCP
+
+    persistentStorage:
+      enabled: true
+      claims:
+        - subName: data
+          storageClass: openebs-ten
+          storage: 10G
+    volumes:
+      # if using persistent volume claims, claimName: {{ microservice }}-{{ subName }}-pvc
+      - name: shaarli-data
+        persistentVolumeClaim:
+          claimName: shaarli-data-pvc
+    volumeMounts:
+      - mountPath: /var/www/shaarli/data
+        name: shaarli-data
+
+###################
+################### SYNCTHING
+###################
+  syncthing:
+    controller: 'deployment'
+
+    deployment:
+      strategy:
+        # rollingUpdate:
+        #   maxSurge: 25%
+        #   maxUnavailable: 25%
+        # type: RollingUpdate
+        type: Recreate
+
+    securityContext:
+      enabled: false
+      spec:
+
+    resources:
+      #.
+      limits:
+        cpu: 1
+        memory: 1024Mi
+      requests:
+        cpu: 0.1
+        memory: 1024Mi
+
+    initContainers:
+      enabled: false
+      spec: {}
+
+    replicas: 1
+    image:
+      name: linuxserver/syncthing
+      tag: 130
+
+    environmentVariables:
+      - name: PUID
+        value: "0"
+      - name: GUID
+        value: "0"
+
+    readinessProbe:
+      httpGet:
+        path: "/"
+        port: ui
+      initialDelaySeconds: 5
+      periodSeconds: 5
+    livenessProbe:
+      httpGet:
+        path: "/"
+        port: ui
+      initialDelaySeconds: 5
+      periodSeconds: 10
+
+    service:
+      enabled: true
+      type: ClusterIP
+      copyContainerPorts: true
+      # used when copyContainerPorts: false
+      customPorts: {}
+      # - port: {{ .Values.service.port }}
+      #   targetPort: 7900
+      #   protocol: TCP
+      #   name: http
+
+    containerPorts:
+      # Commented first line
+      - name: ui
+        containerPort: 8384
+        protocol: TCP
+      - name: discovery
+        containerPort: 21027
+        protocol: UDP
+      - name: listening
+        containerPort: 22000
+        protocol: TCP
+
+    persistentStorage:
+      enabled: true
+      claims:
+        - subName: data
+          storageClass: openebs-hundred
+          storage: 100G
+        - subName: config
+          storageClass: openebs-hundred-megs
+          storage: 100M
+    volumes:
+      # {{ microservice }}-{{ subName }}-pvc
+      - name: syncthing-config
+        persistentVolumeClaim:
+          claimName: syncthing-config-pvc
+      - name: syncthing-data
+        persistentVolumeClaim:
+          claimName: syncthing-data-pvc
+    volumeMounts:
+      - mountPath: /config
+        name: syncthing-config
+      - mountPath: /mnt
+        name: syncthing-data
+
+
+openebs:
+  rbac:
+    create: true
+
+  serviceAccount:
+    create: true
+    name: openebs-helm
+
+  # defaults
+  apiserver:
+    image: "openebs/m-apiserver"
+    imageTag: "0.6.0"
+    replicas: 1
+    ports:
+      externalPort: 5656
+      internalPort: 5656
+    nodeSelector: {}
+    tolerations: {}
+    affinity: {}
+  #
+
+  provisioner:
+    image: "openebs/openebs-k8s-provisioner"
+    imageTag: "0.6.0"
+    replicas: 1
+    nodeSelector: {}
+    tolerations: {}
+    affinity: {}
+
+  jiva:
+    image: "openebs/jiva"
+    imageTag: "0.6.0"
+    replicas: 1
+
+  policies:
+    monitoring:
+      enabled: true
+      image: "openebs/m-exporter"
+      imageTag: "0.6.0"
+
+
+nginx-ingress:
+
+  config: {}
+  # Will add custom header to Nginx https://github.com/kubernetes/ingress-nginx/tree/master/docs/examples/customization/custom-headers
+  headers: {}
+
+  rbac:
+    create: true
+
+  serviceAccount:
+    create: true
+    name: 'nginx-ingress'
+
+  controller:
+
+    minReadySeconds: 10
+
+    resources:
+      limits:
+        cpu: 250m
+        memory: 256Mi
+      requests:
+        cpu: 100m
+        memory: 256Mi
+
+    kind: DaemonSet
+
+    daemonset:
+      useHostPort: true
+
+      hostPorts:
+        http: 80
+        https: 443
+
+    minAvailable: 1
+
+    autoscaling:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 1
+      targetCPUUtilizationPercentage: 85
+      targetMemoryUtilizationPercentage: 85
+
+    service:
+      annotations: {}
+      labels: {}
+      clusterIP: ""
+
+      ## List of IP addresses at which the controller services are available
+      ## Ref: https://kubernetes.io/docs/user-guide/services/#external-ips
+      ##
+      externalIPs:
+        - 173.249.29.134
+
+      # Reserved in SDDC/terraform!
+      # loadBalancerIP: ""
+      # loadBalancerSourceRanges:
+      #   - 0.0.0.0/0
+
+      enableHttp: false
+      enableHttps: true
+
+
+      type: NodePort
+
+
+  # TCP service key:value pairs
+  # Ref: https://github.com/kubernetes/contrib/tree/master/ingress/controllers/nginx/examples/tcp
+  ##
+  tcp:
+    22000: "default/custom-syncthing:22000"
+
+  # UDP service key:value pairs
+  # Ref: https://github.com/kubernetes/contrib/tree/master/ingress/controllers/nginx/examples/udp
+  ##
+  udp:
+    # 21027: "default/custom-syncthing:21027"

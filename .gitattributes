@@ -1,0 +1,4 @@
+values-custom.yaml filter=git-crypt diff=git-crypt
+basic-auth-secret.yaml filter=git-crypt diff=git-crypt
+hosts.ini filter=git-crypt diff=git-crypt
+admin.conf filter=git-crypt diff=git-crypt

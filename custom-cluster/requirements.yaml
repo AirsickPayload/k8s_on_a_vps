@@ -1,0 +1,18 @@
+---
+# requirements.yaml
+dependencies:
+- name: openebs
+  version: "0.6.0"
+  repository: "https://kubernetes-charts.storage.googleapis.com"
+# - name: ipfs
+#   version: 0.2.2
+#   repository: "https://kubernetes-charts.storage.googleapis.com"
+# - name: prometheus
+#   version: 7.0.0
+#   repository: "https://kubernetes-charts.storage.googleapis.com"
+# - name: grafana
+#   version: 1.13.0
+#   repository: "https://kubernetes-charts.storage.googleapis.com"
+- name: nginx-ingress
+  version: "0.25.1"
+  repository: "https://kubernetes-charts.storage.googleapis.com"

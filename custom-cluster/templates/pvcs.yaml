@@ -1,0 +1,19 @@
+{{- range $application, $parameters := .Values.customApps -}}
+{{ if $parameters.persistentStorage.enabled }}
+{{ range $irrelevant, $vars := $parameters.persistentStorage.claims }}
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: "{{ $application }}-{{ $vars.subName }}-pvc"
+  annotations:
+    volume.beta.kubernetes.io/storage-class: {{ $vars.storageClass | quote  }}
+spec:
+  accessModes:
+    - "ReadWriteOnce"
+  resources:
+    requests:
+      storage: {{ $vars.storage | quote }}
+{{ end }}
+{{ end }}
+{{- end -}}

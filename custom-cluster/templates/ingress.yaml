@@ -1,0 +1,37 @@
+{{- if .Values.ingress.enabled -}}
+{{- range $ingress, $parameters := .Values.ingress.instances }}
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: {{ $.Release.Name }}-{{ $ingress }}
+  labels:
+    app: {{ $.Chart.Name }}-{{ $ingress }}
+    chart: {{ $.Chart.Name }}-{{ $.Chart.Version | replace "+" "_" }}
+    release: {{ $.Release.Name }}
+    heritage: {{ $.Release.Service }}
+  annotations:
+      {{- range $key, $value := $parameters.annotations }}
+      {{ $key }}: {{ $value | quote }}
+      {{- end }}
+spec:
+  rules:
+    {{- range $host , $microservice := $parameters.microservices }}
+    - host: {{ $host | quote }}
+      http:
+        paths:
+        - backend:
+            serviceName: {{ $.Release.Name }}-{{ $microservice.svcSuffix }}
+            servicePort: {{ $microservice.svcPort }}
+          path: {{ $microservice.path }}
+    {{- end -}}
+  {{- if $parameters.tls.enabled }}
+  tls:
+    {{- range $host , $microservice := $parameters.microservices }}
+    - secretName: {{ $microservice.tlsSecret }}
+      hosts:
+        - {{ $host | quote }}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- end -}}
