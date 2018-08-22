@@ -1,3 +1,3 @@
 #!/bin/bash
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null && pwd )"
-${DIR}/kubectl --kubeconfig="${DIR}/admin.conf" $@
+kubectl --kubeconfig="${DIR}/admin.conf" $@
